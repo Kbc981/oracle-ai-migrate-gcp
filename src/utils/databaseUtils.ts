@@ -3,6 +3,7 @@ import { DatabaseConnection } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { encrypt, decrypt } from './encryption';
 
+<<<<<<< HEAD
 // Save connection details securely to Supabase
 export const saveConnection = async (connection: DatabaseConnection): Promise<boolean> => {
   try {
@@ -29,6 +30,13 @@ export const saveConnection = async (connection: DatabaseConnection): Promise<bo
     console.error('Error saving connection:', error);
     return false;
   }
+=======
+// Simulated function to save database connection details
+export const saveConnection = (connection: DatabaseConnection): Promise<boolean> => {
+  // In a real app, this would save to localStorage, IndexedDB, or a backend
+  localStorage.setItem(`${connection.type}-connection`, JSON.stringify(connection));
+  return Promise.resolve(true);
+>>>>>>> 4c9f4fd914f25181fe8fe0cb0c1256a2918d1a25
 };
 
 // Load connection details securely from Supabase
@@ -63,7 +71,6 @@ export const loadConnection = async (type: 'sybase' | 'oracle'): Promise<Databas
 export const testConnection = async (connection: DatabaseConnection): Promise<{ success: boolean; message: string }> => {
   // In a real app, this would attempt to connect to the database
   // For this demo, we'll simulate a connection test
-  console.log('Testing connection:', connection);
   
   // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 1500));
@@ -83,7 +90,6 @@ export const deployToOracle = async (
   code: string
 ): Promise<{ success: boolean; message: string }> => {
   // In a real app, this would execute the code against the Oracle database
-  console.log('Deploying code to Oracle:', code);
   
   // Simulate network delay
   await new Promise(resolve => setTimeout(resolve, 2000));

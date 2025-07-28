@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database, FileText, Upload, Clock, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,7 @@ import PerformanceMetricsDashboard from '@/components/PerformanceMetricsDashboar
 import { useConversionLogic } from '@/components/dashboard/ConversionLogic';
 import { useMigrationManager } from '@/components/dashboard/MigrationManager';
 import { useUnreviewedFiles } from '@/hooks/useUnreviewedFiles';
+import { isCacheEnabled, setCacheEnabled } from '@/utils/conversionUtils';
 
 interface FileItem {
   id: string;
@@ -51,6 +52,14 @@ const Dashboard = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingCompleteMigration, setPendingCompleteMigration] = useState(false);
+  const [cacheEnabled, setCacheEnabledState] = useState(isCacheEnabled());
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const conversionTabRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleCache = () => {
+    setCacheEnabled(!cacheEnabled);
+    setCacheEnabledState(!cacheEnabled);
+  };
 
   const { handleCodeUpload } = useMigrationManager();
   const {
@@ -148,6 +157,25 @@ const Dashboard = () => {
       );
     }
   }, [activeTab, unreviewedFiles]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((activeTab === 'conversion' || activeTab === 'devReview') && e.shiftKey && e.key.toLowerCase() === 'f') {
+        setIsFullscreen((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
+
+  // Exit fullscreen if user leaves conversion or devReview tab
+  useEffect(() => {
+    if ((activeTab !== 'conversion' && activeTab !== 'devReview') && isFullscreen) {
+      setIsFullscreen(false);
+    }
+  }, [activeTab, isFullscreen]);
 
   const handleDeleteFiles = (fileIds: string[]) => {
     setFiles(prevFiles => prevFiles.filter(file => !fileIds.includes(file.id)));
@@ -305,7 +333,7 @@ const Dashboard = () => {
         }));
       }
       // Generate summary
-      const reportSummary = (await import('@/utils/conversionUtils')).generateConversionReport(reportResults);
+      const reportSummary = (await import('@/utils/componentUtilswithlangchain')).generateBalancedConversionReport(reportResults);
       const report = {
         timestamp: new Date().toISOString(),
         filesProcessed: reportResults.length,
@@ -356,13 +384,14 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardHeader
-        onGoToHistory={handleGoToHistory}
-        onGoHome={handleGoHome}
-        onShowHelp={() => setShowHelp(true)}
-      />
-
-      <main className="container mx-auto px-4 py-8">
+      {!isFullscreen && (
+        <DashboardHeader
+          onGoToHistory={handleGoToHistory}
+          onGoHome={handleGoHome}
+          onShowHelp={() => setShowHelp(true)}
+        />
+      )}
+      <main className={isFullscreen ? '' : 'container mx-auto px-4 py-8'}>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'upload' | 'conversion' | 'devReview' | 'metrics')}>
           <TabsList className="grid w-full grid-cols-4 max-w-2xl mx-auto mb-8">
             <TabsTrigger value="upload" className="flex items-center gap-2">
@@ -393,25 +422,36 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="conversion">
-            <ConversionPanel
-              files={files}
-              selectedFile={selectedFile}
-              isConverting={isConverting}
-              convertingFileIds={convertingFileIds}
-              onFileSelect={handleFileSelect}
-              onConvertFile={handleConvertFile}
-              onConvertAllByType={handleConvertAllByType}
-              onConvertAll={handleConvertAll}
-              onFixFile={handleFixFile}
-              onManualEdit={handleManualEdit}
-              onDismissIssue={handleDismissIssue}
-              onGenerateReport={handleGenerateReportWrapper}
-              onUploadRedirect={handleResetAndUpload}
-              onClear={handleResetAndUpload}
-              onMoveToDevReview={handleMoveToDevReview}
-              canCompleteMigration={canCompleteMigration}
-              onDeleteFiles={handleDeleteFiles}
-            />
+            <div
+              ref={conversionTabRef}
+              className={isFullscreen ?
+                'fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto flex flex-col' :
+                ''
+              }
+              style={isFullscreen ? { width: '100vw', height: '100vh', padding: 0, margin: 0 } : {}}
+            >
+              <ConversionPanel
+                files={files}
+                selectedFile={selectedFile}
+                isConverting={isConverting}
+                convertingFileIds={convertingFileIds}
+                onFileSelect={handleFileSelect}
+                onConvertFile={handleConvertFile}
+                onConvertAllByType={handleConvertAllByType}
+                onConvertAll={handleConvertAll}
+                onFixFile={handleFixFile}
+                onManualEdit={handleManualEdit}
+                onDismissIssue={handleDismissIssue}
+                onGenerateReport={handleGenerateReportWrapper}
+                onUploadRedirect={handleResetAndUpload}
+                onClear={handleResetAndUpload}
+                onMoveToDevReview={handleMoveToDevReview}
+                canCompleteMigration={canCompleteMigration}
+                onDeleteFiles={handleDeleteFiles}
+                forceMinimized={isFullscreen}
+              />
+              {/* No fullscreen exit button */}
+            </div>
           </TabsContent>
 
           <TabsContent value="metrics">
@@ -435,27 +475,38 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="devReview">
-            <DevReviewPanel
-              canCompleteMigration={canCompleteMigration}
-              onCompleteMigration={() => { handleCompleteMigration(); }}
-              onFileReviewed={handleFileReviewed}
-              unreviewedFiles={unreviewedFiles}
-              isLoading={isLoading}
-              markAsReviewed={markAsReviewed}
-              deleteUnreviewedFile={deleteUnreviewedFile}
-              updateUnreviewedFile={updateUnreviewedFile}
-              refreshUnreviewedFiles={refreshUnreviewedFiles}
-            />
+            <div
+              className={isFullscreen ?
+                'fixed inset-0 z-50 bg-white dark:bg-slate-900 overflow-auto flex flex-col' :
+                ''
+              }
+              style={isFullscreen ? { width: '100vw', height: '100vh', padding: 0, margin: 0 } : {}}
+            >
+              <DevReviewPanel
+                canCompleteMigration={canCompleteMigration}
+                onCompleteMigration={() => { handleCompleteMigration(); }}
+                onFileReviewed={handleFileReviewed}
+                unreviewedFiles={unreviewedFiles}
+                isLoading={isLoading}
+                markAsReviewed={markAsReviewed}
+                deleteUnreviewedFile={deleteUnreviewedFile}
+                updateUnreviewedFile={updateUnreviewedFile}
+                refreshUnreviewedFiles={refreshUnreviewedFiles}
+                forceMinimized={isFullscreen}
+              />
+              {/* No fullscreen exit button */}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
-
       {showHelp && (
         <Help onClose={() => setShowHelp(false)} />
       )}
-      <footer className="w-full text-center py-4 text-gray-500 text-sm border-t bg-white/80 mt-8">
-        © 2025 Migration Platform. All rights reserved. Developed by CosmoAgents | <a href="https://www.github.com/mouktikzz/oracle-ai-migrate" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>GitHub</a>
-      </footer>
+      {!isFullscreen && (
+        <footer className="w-full text-center py-4 text-gray-500 text-sm border-t bg-white/80 mt-8">
+          © 2025 Migration Platform. All rights reserved. Developed by CosmoAgents | <a href="https://www.github.com/mouktikzz/oracle-ai-migrate" target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>GitHub</a>
+        </footer>
+      )}
     </div>
   );
 };
